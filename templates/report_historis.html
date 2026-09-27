@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Data Historis Cuaca — {{ hierarchy.desa }}</title>
+<style>
+  @page {
+    size: A4 landscape;
+    margin: 1.2cm 1.4cm;
+    @bottom-center {
+      content: "Sumber: Open-Meteo ERA5 Reanalysis • Halaman " counter(page) " dari " counter(pages);
+      font-size: 7px; color: #94a3b8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1e293b;
+    font-size: 10px;
+    line-height: 1.45;
+    margin: 0;
+    padding: {% if pdf_mode %}0{% else %}24px{% endif %};
+    background: {% if pdf_mode %}#fff{% else %}#f0f4f8{% endif %};
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .report-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: #fff;
+    {% if not pdf_mode %}
+    padding: 32px 36px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+    border: 1px solid #e2e8f0;
+    {% endif %}
+  }
+  .action-bar {
+    max-width: 1200px;
+    margin: 0 auto 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #1e1b4b;
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(30, 27, 75, 0.2);
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .action-bar a, .action-bar button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    border: none;
+    transition: all 0.2s;
+  }
+  .btn-back { background: rgba(255, 255, 255, 0.15); color: #fff; }
+  .btn-back:hover { background: rgba(255, 255, 255, 0.25); }
+  .btn-print { background: #38bdf8; color: #0f172a; }
+  .btn-print:hover { background: #7dd3fc; }
+  .btn-download { background: #a78bfa; color: #fff; }
+  .btn-download:hover { background: #8b5cf6; }
+  .action-group { display: flex; gap: 8px; }
+
+  header {
+    border-bottom: 3px solid #7c3aed;
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+  }
+  header h1 {
+    font-size: 18px;
+    color: #7c3aed;
+    margin: 0 0 6px;
+  }
+  header .meta { color: #64748b; font-size: 10px; }
+  header .period {
+    display: inline-block;
+    background: #ede9fe;
+    color: #6d28d9;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    margin-top: 6px;
+  }
+
+  .loc-box {
+    background: #f5f3ff;
+    border-radius: 8px;
+    padding: 12px 18px;
+    margin-bottom: 22px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px 20px;
+    border: 1px solid #e9e5fc;
+    font-size: 10px;
+  }
+  .loc-box div span.label { color: #8b5cf6; }
+  .loc-box div span.value { font-weight: 600; color: #1e293b; }
+
+  /* ── Overall stats cards ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    text-align: center;
+  }
+  .stat-card .stat-value {
+    font-size: 20px;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 2px;
+  }
+  .stat-card .stat-label {
+    font-size: 9px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+  }
+  .stat-card.temp { border-top: 3px solid #ef4444; }
+  .stat-card.rain { border-top: 3px solid #3b82f6; }
+  .stat-card.humid { border-top: 3px solid #06b6d4; }
+  .stat-card.days { border-top: 3px solid #8b5cf6; }
+
+  /* ── Monthly summary table ── */
+  h2.section-title {
+    font-size: 13px;
+    color: #fff;
+    background: #7c3aed;
+    padding: 7px 14px;
+    border-radius: 6px;
+    margin: 24px 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  h2.month-title {
+    font-size: 12px;
+    color: #fff;
+    background: #4f46e5;
+    padding: 5px 12px;
+    border-radius: 6px;
+    margin: 20px 0 8px;
+    page-break-after: avoid;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 12px;
+  }
+  th, td {
+    border: 1px solid #cbd5e1;
+    padding: 5px 7px;
+    text-align: center;
+    font-size: 9px;
+  }
+  th {
+    background: #e2e8f0;
+    color: #1e293b;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 8px;
+    letter-spacing: 0.03em;
+  }
+  tr:nth-child(even) td { background: #f8fafc; }
+
+  /* Color-coded cells */
+  .temp-hot { color: #dc2626; font-weight: 600; }
+  .temp-warm { color: #ea580c; }
+  .temp-cool { color: #2563eb; }
+  .rain-heavy { background: #dbeafe !important; font-weight: 600; color: #1d4ed8; }
+  .rain-moderate { background: #eff6ff !important; color: #2563eb; }
+  .rain-light { color: #64748b; }
+  .rain-none { color: #cbd5e1; }
+
+  td.weather-cell {
+    font-size: 9px;
+    white-space: nowrap;
+  }
+  /* ── Time segment banner (Pagi, Siang, Malam) ── */
+  .time-segments-banner {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+    page-break-inside: avoid;
+  }
+  .time-segment-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-radius: 8px;
+    padding: 10px 14px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  }
+  .time-segment-card.pagi {
+    border-left: 4px solid #f97316;
+    background: linear-gradient(135deg, #fff7ed, #ffffff);
+  }
+  .time-segment-card.siang {
+    border-left: 4px solid #eab308;
+    background: linear-gradient(135deg, #fefce8, #ffffff);
+  }
+  .time-segment-card.malam {
+    border-left: 4px solid #6366f1;
+    background: linear-gradient(135deg, #eef2ff, #ffffff);
+  }
+  .time-segment-card .ts-icon { font-size: 22px; line-height: 1; }
+  .time-segment-card .ts-title { font-size: 8.5px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.03em; margin-bottom: 2px; }
+  .time-segment-card .ts-val { font-size: 17px; font-weight: 800; color: #0f172a; line-height: 1.1; }
+  .time-segment-card .ts-sub { font-size: 8px; color: #64748b; }
+
+  /* ── Period table columns (Pagi, Siang, Malam) ── */
+  td.period-cell {
+    text-align: left;
+    padding: 4px 6px;
+    font-size: 8.5px;
+    vertical-align: middle;
+  }
+  td.pagi-cell { background: #fffcf8; }
+  td.siang-cell { background: #fffef7; }
+  td.malam-cell { background: #fafaff; }
+
+  tr:nth-child(even) td.pagi-cell { background: #fff7ed; }
+  tr:nth-child(even) td.siang-cell { background: #fefce8; }
+  tr:nth-child(even) td.malam-cell { background: #eef2ff; }
+
+  .period-wx {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 8.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .period-metrics-sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 1px;
+  }
+  .period-metrics-sub .p-temp {
+    font-weight: 700;
+    color: #0f172a;
+    font-size: 8.5px;
+  }
+  .period-metrics-sub .p-rain {
+    font-size: 7.5px;
+    color: #2563eb;
+    font-weight: 600;
+  }
+  td.temp-daily {
+    white-space: nowrap;
+    font-size: 8.5px;
+    font-weight: 600;
+  }
+
+  /* ── Monthly summary row ── */
+  tr.month-summary td {
+    background: #f5f3ff !important;
+    font-weight: 700;
+    color: #4f46e5;
+    border-top: 2px solid #7c3aed;
+    font-size: 8.5px;
+  }
+
+  footer.doc-footer {
+    margin-top: 30px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 8px;
+    line-height: 1.5;
+  }
+
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff !important; padding: 0 !important; }
+    .report-container { border: none !important; box-shadow: none !important; padding: 0 !important; max-width: 100% !important; }
+  }
+</style>
+</head>
+<body>
+
+{% if not pdf_mode %}
+<div class="action-bar no-print">
+  <a href="/" class="btn-back">⬅ Kembali</a>
+  <div class="action-group">
+    <button onclick="window.print()" class="btn-print">🖨️ Cetak (Ctrl+P)</button>
+    <a href="/pdf-historis?adm4={{ adm4 }}&start={{ start_date }}&end={{ end_date }}" class="btn-download">📊 Download PDF</a>
+  </div>
+</div>
+{% endif %}
+
+<div class="report-container">
+<header>
+  <h1>📊 Data Historis Cuaca Harian</h1>
+  <div class="meta">Dibuat pada {{ generated_at }} WIB &middot; Kode wilayah: {{ adm4 }}</div>
+  <div class="period">📅 Periode: {{ start_date }} s/d {{ end_date }} ({{ overall.total_hari }} hari)</div>
+</header>
+
+<div class="loc-box">
+  <div><span class="label">Desa/Kelurahan:</span> <span class="value">{{ hierarchy.desa }}</span></div>
+  <div><span class="label">Kecamatan:</span> <span class="value">{{ hierarchy.kecamatan }}</span></div>
+  <div><span class="label">Kabupaten/Kota:</span> <span class="value">{{ hierarchy.kabkota }}</span></div>
+  <div><span class="label">Provinsi:</span> <span class="value">{{ hierarchy.provinsi }}</span></div>
+  <div><span class="label">Koordinat:</span> <span class="value">{{ "%.4f"|format(lat) }}, {{ "%.4f"|format(lon) }}</span></div>
+  {% if lokasi.timezone %}
+  <div><span class="label">Timezone:</span> <span class="value">{{ lokasi.timezone }}</span></div>
+  {% endif %}
+</div>
+
+<!-- ══ Ringkasan Keseluruhan ══ -->
+<h2 class="section-title">📈 Ringkasan Periode {{ start_date }} — {{ end_date }}</h2>
+<div class="stats-grid">
+  <div class="stat-card temp">
+    <div class="stat-value">{{ overall.suhu_max_rata }}°</div>
+    <div class="stat-label">Rata-rata Suhu Maks</div>
+  </div>
+  <div class="stat-card temp">
+    <div class="stat-value">{{ overall.suhu_min_rata }}°</div>
+    <div class="stat-label">Rata-rata Suhu Min</div>
+  </div>
+  <div class="stat-card rain">
+    <div class="stat-value">{{ overall.total_hujan }} mm</div>
+    <div class="stat-label">Total Curah Hujan</div>
+  </div>
+  <div class="stat-card humid">
+    <div class="stat-value">{{ overall.kelembapan_rata }}%</div>
+    <div class="stat-label">Rata-rata Kelembapan</div>
+  </div>
+  <div class="stat-card days">
+    <div class="stat-value">{{ overall.hari_hujan }}</div>
+    <div class="stat-label">Hari Hujan (&gt;0.5mm)</div>
+  </div>
+  <div class="stat-card temp">
+    <div class="stat-value">{{ overall.suhu_tertinggi }}°</div>
+    <div class="stat-label">Suhu Tertinggi</div>
+  </div>
+  <div class="stat-card temp">
+    <div class="stat-value">{{ overall.suhu_terendah }}°</div>
+    <div class="stat-label">Suhu Terendah</div>
+  </div>
+  <div class="stat-card days">
+    <div class="stat-value">{{ overall.total_hari }}</div>
+    <div class="stat-label">Total Hari Data</div>
+  </div>
+</div>
+
+<!-- ══ Banner Karakteristik Waktu (Pagi, Siang, Malam) ══ -->
+<div class="time-segments-banner">
+  <div class="time-segment-card pagi">
+    <div class="ts-icon">🌅</div>
+    <div class="ts-content">
+      <div class="ts-title">Pagi Hari (06:00 – 12:00)</div>
+      <div class="ts-val">{{ overall.suhu_pagi_rata if overall.suhu_pagi_rata is not none else '-' }}°C</div>
+      <div class="ts-sub">Rata-rata Suhu Pagi</div>
+    </div>
+  </div>
+  <div class="time-segment-card siang">
+    <div class="ts-icon">☀️</div>
+    <div class="ts-content">
+      <div class="ts-title">Siang / Sore (12:00 – 18:00)</div>
+      <div class="ts-val">{{ overall.suhu_siang_rata if overall.suhu_siang_rata is not none else '-' }}°C</div>
+      <div class="ts-sub">Rata-rata Suhu Siang</div>
+    </div>
+  </div>
+  <div class="time-segment-card malam">
+    <div class="ts-icon">🌙</div>
+    <div class="ts-content">
+      <div class="ts-title">Malam Hari (18:00 – 06:00)</div>
+      <div class="ts-val">{{ overall.suhu_malam_rata if overall.suhu_malam_rata is not none else '-' }}°C</div>
+      <div class="ts-sub">Rata-rata Suhu Malam</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Ringkasan Bulanan ══ -->
+<h2 class="section-title">📅 Ringkasan Per Bulan</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Bulan</th>
+      <th>Hari</th>
+      <th>Suhu Maks</th>
+      <th>Suhu Min</th>
+      <th style="background:#ffedd5; color:#9a3412;">🌅 Pagi Rata²</th>
+      <th style="background:#fef9c3; color:#854d0e;">☀️ Siang Rata²</th>
+      <th style="background:#e0e7ff; color:#3730a3;">🌙 Malam Rata²</th>
+      <th>Total Hujan (mm)</th>
+      <th>Hari Hujan</th>
+      <th>Kelembapan (%)</th>
+      <th>Angin Maks (km/j)</th>
+      <th>Sinar ☀️ (jam)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for month_key, stats in monthly_stats.items() %}
+    <tr>
+      <td style="font-weight:700; text-align:left;">{{ month_key }}</td>
+      <td>{{ stats.jumlah_hari }}</td>
+      <td class="{% if stats.suhu_max_rata and stats.suhu_max_rata > 33 %}temp-hot{% elif stats.suhu_max_rata and stats.suhu_max_rata > 30 %}temp-warm{% endif %}">
+        {{ stats.suhu_max_rata or '-' }}°C
+      </td>
+      <td>{{ stats.suhu_min_rata or '-' }}°C</td>
+      <td style="font-weight:700; color:#c2410c;">{{ stats.suhu_pagi_rata or '-' }}°C</td>
+      <td style="font-weight:700; color:#a16207;">{{ stats.suhu_siang_rata or '-' }}°C</td>
+      <td style="font-weight:700; color:#4338ca;">{{ stats.suhu_malam_rata or '-' }}°C</td>
+      <td class="{% if stats.total_hujan and stats.total_hujan > 200 %}rain-heavy{% elif stats.total_hujan and stats.total_hujan > 100 %}rain-moderate{% endif %}">
+        {{ stats.total_hujan or '-' }}
+      </td>
+      <td>{{ stats.hari_hujan }}</td>
+      <td>{{ stats.kelembapan_rata or '-' }}%</td>
+      <td>{{ stats.angin_max or '-' }}</td>
+      <td>{{ stats.sinar_rata or '-' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- ══ Data Harian Per Bulan ══ -->
+{% for month_key, days in by_month.items() %}
+<h2 class="month-title">📅 {{ month_key }} — Data Harian &amp; Segmen Waktu ({{ days|length }} hari)</h2>
+<table>
+  <thead>
+    <tr>
+      <th style="width:72px">Tanggal</th>
+      <th style="background:#ffedd5; color:#9a3412; width:135px;">🌅 Pagi (06–12)</th>
+      <th style="background:#fef9c3; color:#854d0e; width:135px;">☀️ Siang (12–18)</th>
+      <th style="background:#e0e7ff; color:#3730a3; width:135px;">🌙 Malam (18–06)</th>
+      <th style="width:85px;">Suhu Harian</th>
+      <th style="width:65px;">Hujan (mm)</th>
+      <th style="width:55px;">Kelembapan</th>
+      <th style="width:75px;">Angin Maks</th>
+      <th style="width:50px;">Sinar ☀️</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in days %}
+    <tr>
+      <td class="date-cell">{{ d.tanggal }}</td>
+      <td class="period-cell pagi-cell">
+        <div class="period-wx">{{ d.pagi.emoji }} {{ d.pagi.desc }}</div>
+        <div class="period-metrics-sub">
+          <span class="p-temp">{{ d.pagi.temp if d.pagi.temp is not none else '-' }}°C</span>
+          {% if d.pagi.rain and d.pagi.rain > 0 %}<span class="p-rain">💧{{ d.pagi.rain }}mm</span>{% endif %}
+        </div>
+      </td>
+      <td class="period-cell siang-cell">
+        <div class="period-wx">{{ d.siang.emoji }} {{ d.siang.desc }}</div>
+        <div class="period-metrics-sub">
+          <span class="p-temp">{{ d.siang.temp if d.siang.temp is not none else '-' }}°C</span>
+          {% if d.siang.rain and d.siang.rain > 0 %}<span class="p-rain">💧{{ d.siang.rain }}mm</span>{% endif %}
+        </div>
+      </td>
+      <td class="period-cell malam-cell">
+        <div class="period-wx">{{ d.malam.emoji }} {{ d.malam.desc }}</div>
+        <div class="period-metrics-sub">
+          <span class="p-temp">{{ d.malam.temp if d.malam.temp is not none else '-' }}°C</span>
+          {% if d.malam.rain and d.malam.rain > 0 %}<span class="p-rain">💧{{ d.malam.rain }}mm</span>{% endif %}
+        </div>
+      </td>
+      <td class="temp-daily">
+        <span class="temp-cool">{{ d.suhu_min if d.suhu_min is not none else '-' }}°</span> – <span class="temp-hot">{{ d.suhu_max if d.suhu_max is not none else '-' }}°</span>
+      </td>
+      <td class="{% if d.curah_hujan and d.curah_hujan > 20 %}rain-heavy{% elif d.curah_hujan and d.curah_hujan > 5 %}rain-moderate{% elif d.curah_hujan and d.curah_hujan > 0.5 %}rain-light{% else %}rain-none{% endif %}">
+        {{ d.curah_hujan if d.curah_hujan is not none else '-' }}
+      </td>
+      <td>{{ d.kelembapan if d.kelembapan is not none else '-' }}%</td>
+      <td>{{ d.angin_max if d.angin_max is not none else '-' }} km/j <span style="font-size:7.5px; color:#64748b;">{{ d.angin_arah }}</span></td>
+      <td>{{ d.sinar_matahari_jam if d.sinar_matahari_jam is not none else '-' }} j</td>
+    </tr>
+    {% endfor %}
+    {% if month_key in monthly_stats %}
+    <tr class="month-summary">
+      <td style="text-align:left;">📊 {{ month_key }}</td>
+      <td style="text-align:left;">⌀ {{ monthly_stats[month_key].suhu_pagi_rata or '-' }}°C</td>
+      <td style="text-align:left;">⌀ {{ monthly_stats[month_key].suhu_siang_rata or '-' }}°C</td>
+      <td style="text-align:left;">⌀ {{ monthly_stats[month_key].suhu_malam_rata or '-' }}°C</td>
+      <td>{{ monthly_stats[month_key].suhu_min_rata }}° – {{ monthly_stats[month_key].suhu_max_rata }}°</td>
+      <td>Σ {{ monthly_stats[month_key].total_hujan }} mm</td>
+      <td>⌀ {{ monthly_stats[month_key].kelembapan_rata }}%</td>
+      <td>⤒ {{ monthly_stats[month_key].angin_max }} km/j</td>
+      <td>⌀ {{ monthly_stats[month_key].sinar_rata }} j</td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+{% endfor %}
+
+<footer class="doc-footer">
+  Data cuaca historis bersumber dari <strong>Open-Meteo ERA5 Reanalysis</strong> (CC BY 4.0).<br>
+  Koordinat lokasi diperoleh dari API resmi BMKG. Generator Laporan Cuaca Historis.
+</footer>
+</div>
+
+</body>
+</html>

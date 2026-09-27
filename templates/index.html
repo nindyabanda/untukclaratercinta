@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generator Laporan Cuaca — BMKG & Data Historis</title>
+<meta name="description" content="Generator laporan cuaca wilayah Indonesia. Prakiraan 3 hari ke depan (BMKG) dan data historis hingga 12 bulan ke belakang (Open-Meteo).">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #0284c7;
+    --primary-hover: #0369a1;
+    --primary-light: #e0f2fe;
+    --accent: #7c3aed;
+    --accent-light: #ede9fe;
+    --bg-page: #f0f4f8;
+    --card-bg: #ffffff;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --border: #cbd5e1;
+    --border-focus: #38bdf8;
+    --success: #059669;
+    --success-light: #d1fae5;
+    --radius: 14px;
+    --shadow: 0 10px 40px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+    background-size: 24px 24px;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    color: var(--text-main);
+  }
+  .card {
+    width: 100%;
+    max-width: 620px;
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 38px 34px;
+    border: 1px solid rgba(226, 232, 240, 0.6);
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 5px 14px;
+    border-radius: 9999px;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .badge-bmkg { background: var(--primary-light); color: var(--primary); }
+  .badge-hist { background: var(--accent-light); color: var(--accent); }
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text-main);
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+  p.sub {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  /* ── Mode toggle ── */
+  .mode-toggle {
+    display: flex;
+    gap: 0;
+    background: #f1f5f9;
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 26px;
+    border: 1px solid #e2e8f0;
+  }
+  .mode-btn {
+    flex: 1;
+    padding: 11px 8px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.86rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text-muted);
+    transition: all 0.25s ease;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .mode-btn.active {
+    background: #fff;
+    color: var(--text-main);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
+  }
+  .mode-btn:hover:not(.active) {
+    color: var(--text-main);
+    background: rgba(255,255,255,0.5);
+  }
+
+  /* ── Form groups ── */
+  .form-group { margin-bottom: 16px; }
+  label {
+    display: flex;
+    align-items: center;
+    font-size: 0.84rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #334155;
+  }
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+  .select-wrapper { position: relative; }
+  select, input[type="date"] {
+    width: 100%;
+    padding: 11px 38px 11px 14px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    font-size: 0.92rem;
+    background: #ffffff;
+    color: var(--text-main);
+    font-family: inherit;
+    appearance: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  input[type="date"] {
+    padding-right: 14px;
+    cursor: text;
+  }
+  select:focus, input[type="date"]:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+  }
+  select:disabled, input[type="date"]:disabled {
+    background: #f8fafc;
+    color: #94a3b8;
+    border-color: #e2e8f0;
+    cursor: not-allowed;
+  }
+  .select-arrow {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: #94a3b8;
+    font-size: 0.7rem;
+  }
+
+  /* ── Date range row ── */
+  .date-range-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  /* ── Quick presets ── */
+  .quick-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .preset-btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+  .preset-btn:hover {
+    background: var(--accent-light);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .preset-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  /* ── Action buttons ── */
+  .row-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 28px;
+  }
+  .btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 16px;
+    border-radius: 10px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    border: none;
+    font-family: inherit;
+  }
+  .btn-preview {
+    background: #f1f5f9;
+    color: #334155;
+    border: 1.5px solid #cbd5e1;
+  }
+  .btn-preview:hover:not(.disabled) {
+    background: #e2e8f0;
+    color: #0f172a;
+  }
+  .btn-forecast-pdf {
+    background: var(--primary);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
+  }
+  .btn-forecast-pdf:hover:not(.disabled) {
+    background: var(--primary-hover);
+    box-shadow: 0 6px 20px rgba(2, 132, 199, 0.4);
+    transform: translateY(-1px);
+  }
+  .btn-hist-pdf {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+  }
+  .btn-hist-pdf:hover:not(.disabled) {
+    background: #6d28d9;
+    box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4);
+    transform: translateY(-1px);
+  }
+  .btn.disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+    box-shadow: none;
+    transform: none;
+  }
+
+  /* ── Status & info ── */
+  .status {
+    margin-top: 14px;
+    font-size: 0.84rem;
+    min-height: 1.4em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    color: var(--primary);
+  }
+  .status.error { color: #e11d48; }
+  .status.success { color: var(--success); }
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(2, 132, 199, 0.2);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .hint {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 0.78rem;
+    color: #94a3b8;
+    line-height: 1.6;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .hidden { display: none !important; }
+
+  /* ── Info chip ── */
+  .info-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--success-light);
+    color: var(--success);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 8px;
+    margin-top: 10px;
+  }
+
+  /* ── Responsive tweaks ── */
+  @media (max-width: 480px) {
+    .card { padding: 24px 18px; }
+    .mode-btn { font-size: 0.78rem; padding: 9px 4px; }
+    .date-range-row { grid-template-columns: 1fr; }
+    .row-actions { flex-direction: column; }
+    .quick-presets { gap: 4px; }
+    .preset-btn { font-size: 0.72rem; padding: 4px 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="header">
+    <span class="badge badge-bmkg" id="headerBadge">🌤️ Data Resmi BMKG + Open-Meteo</span>
+    <h1>Laporan Cuaca Wilayah</h1>
+    <p class="sub">Pilih wilayah, lalu lihat prakiraan cuaca atau data historis hingga 12 bulan ke belakang.</p>
+  </div>
+
+  <!-- Mode Toggle -->
+  <div class="mode-toggle">
+    <button class="mode-btn active" id="modeForecast" onclick="switchMode('forecast')">
+      🌤️ Prakiraan (±3 hari)
+    </button>
+    <button class="mode-btn" id="modeHistorical" onclick="switchMode('historical')">
+      📊 Data Historis (1–12 bulan)
+    </button>
+  </div>
+
+  <!-- Location selectors -->
+  <div class="form-group">
+    <label for="provinsi"><span class="step-num">1</span> Provinsi</label>
+    <div class="select-wrapper">
+      <select id="provinsi">
+        <option value="">-- Pilih Provinsi --</option>
+        {% for p in provinsi %}
+        <option value="{{ p.kode }}">{{ p.nama }}</option>
+        {% endfor %}
+      </select>
+      <span class="select-arrow">▼</span>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="kabkota"><span class="step-num">2</span> Kabupaten / Kota</label>
+    <div class="select-wrapper">
+      <select id="kabkota" disabled><option value="">-- Pilih Provinsi dulu --</option></select>
+      <span class="select-arrow">▼</span>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="kecamatan"><span class="step-num">3</span> Kecamatan</label>
+    <div class="select-wrapper">
+      <select id="kecamatan" disabled><option value="">-- Pilih Kab/Kota dulu --</option></select>
+      <span class="select-arrow">▼</span>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="desa"><span class="step-num">4</span> Desa / Kelurahan</label>
+    <div class="select-wrapper">
+      <select id="desa" disabled><option value="">-- Pilih Kecamatan dulu --</option></select>
+      <span class="select-arrow">▼</span>
+    </div>
+  </div>
+
+  <!-- ══ Forecast section ══ -->
+  <div id="sectionForecast">
+    <div class="form-group">
+      <label for="tanggal"><span class="step-num">5</span> Hari Prakiraan</label>
+      <div class="select-wrapper">
+        <select id="tanggal" disabled><option value="">-- Pilih Desa dulu --</option></select>
+        <span class="select-arrow">▼</span>
+      </div>
+    </div>
+
+    <div class="row-actions">
+      <a id="btnPreview" class="btn btn-preview disabled" href="#" target="_blank">👁 Preview</a>
+      <a id="btnPdf" class="btn btn-forecast-pdf disabled" href="#">⬇ Download PDF</a>
+    </div>
+  </div>
+
+  <!-- ══ Historical section ══ -->
+  <div id="sectionHistorical" class="hidden">
+    <div class="form-group">
+      <label><span class="step-num">5</span> Rentang Waktu</label>
+      <div class="date-range-row">
+        <div>
+          <label for="startDate" style="font-size:0.76rem;color:#94a3b8;margin-bottom:4px;font-weight:500;">Dari Tanggal</label>
+          <input type="date" id="startDate" disabled>
+        </div>
+        <div>
+          <label for="endDate" style="font-size:0.76rem;color:#94a3b8;margin-bottom:4px;font-weight:500;">Sampai Tanggal</label>
+          <input type="date" id="endDate" disabled>
+        </div>
+      </div>
+      <div class="quick-presets" id="quickPresets">
+        <button class="preset-btn" data-months="1">1 Bulan</button>
+        <button class="preset-btn" data-months="3">3 Bulan</button>
+        <button class="preset-btn active" data-months="6">6 Bulan</button>
+        <button class="preset-btn" data-months="9">9 Bulan</button>
+        <button class="preset-btn" data-months="12">12 Bulan</button>
+      </div>
+      <div class="info-chip hidden" id="infoChip">
+        📅 <span id="dayCount">0</span> hari data akan diambil
+      </div>
+    </div>
+
+    <div class="row-actions">
+      <a id="btnHistPreview" class="btn btn-preview disabled" href="#" target="_blank">👁 Preview Historis</a>
+      <a id="btnHistPdf" class="btn btn-hist-pdf disabled" href="#">📊 Download PDF Historis</a>
+    </div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="hint">
+    <span>💡</span>
+    <span>
+      <strong>Prakiraan:</strong> Data BMKG resmi (3 hari ke depan, per-jam).<br>
+      <strong>Historis:</strong> Data reanalisis Open-Meteo (ERA5) hingga 12 bulan ke belakang — mencakup suhu, curah hujan, kelembapan, angin, dan durasi sinar matahari harian.
+    </span>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const provinsiEl = $('provinsi'), kabkotaEl = $('kabkota'), kecamatanEl = $('kecamatan'),
+      desaEl = $('desa'), tanggalEl = $('tanggal'), statusEl = $('status'),
+      startDateEl = $('startDate'), endDateEl = $('endDate'),
+      btnPreview = $('btnPreview'), btnPdf = $('btnPdf'),
+      btnHistPreview = $('btnHistPreview'), btnHistPdf = $('btnHistPdf'),
+      infoChip = $('infoChip'), dayCountEl = $('dayCount');
+
+let currentMode = 'forecast'; // 'forecast' | 'historical'
+
+// ── Mode switching ──
+function switchMode(mode) {
+  currentMode = mode;
+  $('modeForecast').classList.toggle('active', mode === 'forecast');
+  $('modeHistorical').classList.toggle('active', mode === 'historical');
+  $('sectionForecast').classList.toggle('hidden', mode !== 'forecast');
+  $('sectionHistorical').classList.toggle('hidden', mode !== 'historical');
+
+  const badge = $('headerBadge');
+  if (mode === 'forecast') {
+    badge.className = 'badge badge-bmkg';
+    badge.innerHTML = '🌤️ Data Resmi BMKG';
+  } else {
+    badge.className = 'badge badge-hist';
+    badge.innerHTML = '📊 Open-Meteo Archive (ERA5)';
+  }
+
+  // If desa is selected and switching to historical, enable date inputs
+  if (mode === 'historical' && desaEl.value) {
+    startDateEl.disabled = false;
+    endDateEl.disabled = false;
+    setDefaultDates(6);
+  }
+  updateAllButtons();
+}
+
+// ── Status helper ──
+function setStatus(msg, type = 'info', showSpinner = false) {
+  statusEl.className = 'status' + (type === 'error' ? ' error' : type === 'success' ? ' success' : '');
+  if (!msg) { statusEl.innerHTML = ''; return; }
+  statusEl.innerHTML = (showSpinner ? '<span class="spinner"></span> ' : '') + msg;
+}
+
+// ── Select helpers ──
+function resetSelect(el, placeholder) {
+  el.innerHTML = `<option value="">${placeholder}</option>`;
+  el.disabled = true;
+}
+function fillSelect(el, items, placeholder) {
+  el.innerHTML = `<option value="">${placeholder}</option>` +
+    items.map(i => `<option value="${i.kode}">${i.nama}</option>`).join('');
+  el.disabled = false;
+}
+
+async function getJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Gagal memuat data (' + res.status + ')');
+  return res.json();
+}
+
+// ── Date helpers ──
+function formatDate(d) {
+  return d.toISOString().split('T')[0];
+}
+function setDefaultDates(months) {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1); // yesterday (archive might not have today yet)
+  const start = new Date(yesterday);
+  start.setMonth(start.getMonth() - months);
+  startDateEl.value = formatDate(start);
+  endDateEl.value = formatDate(yesterday);
+
+  // Set max to yesterday
+  endDateEl.max = formatDate(yesterday);
+  startDateEl.max = formatDate(yesterday);
+
+  // Set min to 2 years ago
+  const minDate = new Date(today);
+  minDate.setFullYear(minDate.getFullYear() - 2);
+  startDateEl.min = formatDate(minDate);
+
+  updateDateInfo();
+  updateAllButtons();
+}
+function updateDateInfo() {
+  if (startDateEl.value && endDateEl.value) {
+    const start = new Date(startDateEl.value);
+    const end = new Date(endDateEl.value);
+    const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    if (diff > 0 && diff <= 730) {
+      dayCountEl.textContent = diff;
+      infoChip.classList.remove('hidden');
+    } else {
+      infoChip.classList.add('hidden');
+    }
+  } else {
+    infoChip.classList.add('hidden');
+  }
+}
+
+// ── Quick preset buttons ──
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    setDefaultDates(parseInt(btn.dataset.months));
+  });
+});
+startDateEl.addEventListener('change', () => {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  updateDateInfo();
+  updateAllButtons();
+});
+endDateEl.addEventListener('change', () => {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  updateDateInfo();
+  updateAllButtons();
+});
+
+// ── Cascading location selectors ──
+provinsiEl.addEventListener('change', async () => {
+  resetSelect(kabkotaEl, '-- Pilih Kab/Kota --');
+  resetSelect(kecamatanEl, '-- Pilih Kecamatan dulu --');
+  resetSelect(desaEl, '-- Pilih Desa dulu --');
+  resetSelect(tanggalEl, '-- Pilih Desa dulu --');
+  startDateEl.disabled = true; endDateEl.disabled = true;
+  infoChip.classList.add('hidden');
+  updateAllButtons();
+  if (!provinsiEl.value) return;
+  setStatus('Memuat kabupaten/kota...', 'info', true);
+  try {
+    const data = await getJSON(`/api/kabkota/${provinsiEl.value}`);
+    fillSelect(kabkotaEl, data, '-- Pilih Kab/Kota --');
+    setStatus('');
+  } catch (e) { setStatus('Gagal memuat data wilayah.', 'error'); }
+});
+
+kabkotaEl.addEventListener('change', async () => {
+  resetSelect(kecamatanEl, '-- Pilih Kecamatan --');
+  resetSelect(desaEl, '-- Pilih Desa dulu --');
+  resetSelect(tanggalEl, '-- Pilih Desa dulu --');
+  startDateEl.disabled = true; endDateEl.disabled = true;
+  infoChip.classList.add('hidden');
+  updateAllButtons();
+  if (!kabkotaEl.value) return;
+  setStatus('Memuat kecamatan...', 'info', true);
+  try {
+    const data = await getJSON(`/api/kecamatan/${kabkotaEl.value}`);
+    fillSelect(kecamatanEl, data, '-- Pilih Kecamatan --');
+    setStatus('');
+  } catch (e) { setStatus('Gagal memuat data wilayah.', 'error'); }
+});
+
+kecamatanEl.addEventListener('change', async () => {
+  resetSelect(desaEl, '-- Pilih Desa --');
+  resetSelect(tanggalEl, '-- Pilih Desa dulu --');
+  startDateEl.disabled = true; endDateEl.disabled = true;
+  infoChip.classList.add('hidden');
+  updateAllButtons();
+  if (!kecamatanEl.value) return;
+  setStatus('Memuat desa/kelurahan...', 'info', true);
+  try {
+    const data = await getJSON(`/api/desa/${kecamatanEl.value}`);
+    fillSelect(desaEl, data, '-- Pilih Desa --');
+    setStatus('');
+  } catch (e) { setStatus('Gagal memuat data wilayah.', 'error'); }
+});
+
+desaEl.addEventListener('change', async () => {
+  resetSelect(tanggalEl, 'Memuat...');
+  infoChip.classList.add('hidden');
+  updateAllButtons();
+  if (!desaEl.value) {
+    startDateEl.disabled = true;
+    endDateEl.disabled = true;
+    return;
+  }
+
+  // Enable historical dates
+  if (currentMode === 'historical') {
+    startDateEl.disabled = false;
+    endDateEl.disabled = false;
+    setDefaultDates(6);
+  }
+
+  // Always fetch forecast dates for forecast mode
+  setStatus('Menghubungi API BMKG untuk jadwal prakiraan...', 'info', true);
+  try {
+    const dates = await getJSON(`/api/tanggal/${desaEl.value}`);
+    tanggalEl.innerHTML = `<option value="">-- Semua hari prakiraan (±3 hari) --</option>` +
+      dates.map(d => `<option value="${d}">${d}</option>`).join('');
+    tanggalEl.disabled = false;
+    setStatus('✅ Lokasi siap! Pilih mode dan opsi di atas.', 'success');
+  } catch (e) {
+    setStatus('Prakiraan BMKG tidak tersedia, tetapi data historis tetap bisa digunakan.', 'error');
+    // Historical mode still works even if BMKG forecast fails
+    if (currentMode === 'historical') {
+      startDateEl.disabled = false;
+      endDateEl.disabled = false;
+      setDefaultDates(6);
+    }
+  }
+  updateAllButtons();
+});
+
+tanggalEl.addEventListener('change', updateAllButtons);
+
+// ── Button state management ──
+function updateAllButtons() {
+  const desaReady = !!desaEl.value;
+
+  // Forecast buttons
+  const forecastParams = new URLSearchParams({ adm4: desaEl.value || '', tanggal: tanggalEl.value || '' });
+  btnPreview.href = desaReady ? `/preview?${forecastParams}` : '#';
+  btnPdf.href = desaReady ? `/pdf?${forecastParams}` : '#';
+  btnPreview.classList.toggle('disabled', !desaReady);
+  btnPdf.classList.toggle('disabled', !desaReady);
+
+  // Historical buttons
+  const histReady = desaReady && startDateEl.value && endDateEl.value && (new Date(endDateEl.value) > new Date(startDateEl.value));
+  const histParams = new URLSearchParams({
+    adm4: desaEl.value || '',
+    start: startDateEl.value || '',
+    end: endDateEl.value || ''
+  });
+  btnHistPreview.href = histReady ? `/preview-historis?${histParams}` : '#';
+  btnHistPdf.href = histReady ? `/pdf-historis?${histParams}` : '#';
+  btnHistPreview.classList.toggle('disabled', !histReady);
+  btnHistPdf.classList.toggle('disabled', !histReady);
+}
+
+// PDF download feedback
+btnPdf.addEventListener('click', () => {
+  if (!desaEl.value) return;
+  setStatus('Menyiapkan PDF prakiraan cuaca...', 'info', true);
+  setTimeout(() => { setStatus('✅ PDF berhasil di-download!', 'success'); setTimeout(() => setStatus(''), 4000); }, 2500);
+});
+btnHistPdf.addEventListener('click', () => {
+  if (!desaEl.value || !startDateEl.value || !endDateEl.value) return;
+  setStatus('Menyiapkan PDF data historis (mungkin butuh beberapa detik)...', 'info', true);
+  setTimeout(() => { setStatus('✅ PDF historis berhasil di-download!', 'success'); setTimeout(() => setStatus(''), 4000); }, 4000);
+});
+
+updateAllButtons();
+</script>
+</body>
+</html>
