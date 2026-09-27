@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  cuaca-app:
+    build: .
+    image: ghcr.io/nindyabanda/untukclaratercinta:latest
+    container_name: cuaca-app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000

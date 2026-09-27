@@ -1,84 +1,93 @@
-# Generator Laporan Cuaca BMKG (PDF)
+# 🌦️ Generator Laporan Cuaca BMKG & Data Historis (PDF)
 
-Aplikasi lokal berbasis **Flask + WeasyPrint** untuk memilih lokasi
-(Provinsi → Kab/Kota → Kecamatan → Desa/Kelurahan) dan tanggal prakiraan,
-lalu men-generate laporan cuaca BMKG dalam bentuk **PDF rapi yang bisa
-langsung didownload**.
+Aplikasi web modern berbasis **Flask + WeasyPrint** untuk memantau prakiraan cuaca resmi BMKG (±3 hari ke depan) serta menganalisis data cuaca historis (1–12 bulan ke belakang via Open-Meteo ERA5), lengkap dengan pembagian waktu **Pagi, Siang, dan Malam** serta ekspor laporan ke format **PDF resmi siap cetak**.
 
-## Cara menjalankan (lokal)
+---
+
+## 🚀 Fitur Utama
+
+1. **Prakiraan Cuaca BMKG (±3 Hari)**:
+   - Data langsung dari API resmi BMKG per desa/kelurahan di seluruh Indonesia.
+   - Ringkasan waktu: **Pagi (06:00–12:00)**, **Siang (12:00–18:00)**, dan **Malam (18:00–06:00)**.
+   - Export PDF A4 portrait dengan WeasyPrint & fallback browser headless.
+
+2. **Data Historis Cuaca (1–12 Bulan)**:
+   - Data reanalisis Open-Meteo ERA5 Reanalysis berdasarkan koordinat presisi BMKG.
+   - Agregasi harian & bulanan untuk suhu, kelembapan, curah hujan, angin, dan sinar matahari.
+   - Rincian segmen pagi, siang, dan malam untuk setiap tanggal.
+   - Export PDF A4 landscape dengan ringkasan statistik komprehensif.
+
+3. **Database Wilayah Lengkap**:
+   - SQLite `data/wilayah.db` memuat ~83.700 desa/kelurahan di Indonesia (Kepmendagri 2025).
+
+---
+
+## 🐳 Deployment Docker & GitHub Actions
+
+Repository ini sudah terintegrasi penuh dengan **GitHub Actions** dan **GitHub Container Registry (GHCR)**.
+
+### 1. Build & Push Otomatis via GitHub Actions
+Setiap kali ada perubahan yang di-push ke branch `main`, GitHub Actions akan otomatis:
+- Menjalankan build Docker container menggunakan `Dockerfile`.
+- Mempublikasikan image ke **GitHub Container Registry**:
+  ```text
+  ghcr.io/nindyabanda/untukclaratercinta:latest
+  ```
+
+### 2. Menjalankan Container Docker di Server / VPS
+Cukup jalankan satu perintah:
+```bash
+docker run -d -p 5000:5000 --name cuaca-app ghcr.io/nindyabanda/untukclaratercinta:latest
+```
+
+Atau menggunakan **Docker Compose**:
+```bash
+docker compose up -d
+```
+Aplikasi akan langsung aktif dan bisa diakses di `http://localhost:5000` (atau IP publik server Anda).
+
+---
+
+## 💻 Cara Menjalankan Secara Lokal (Python)
 
 1. Pastikan Python 3.9+ terpasang.
-2. Buat virtual environment (opsional tapi disarankan):
+2. Buat dan aktifkan virtual environment:
    ```bash
    python -m venv venv
-   source venv/bin/activate      # Windows: venv\Scripts\activate
+   # Windows:
+   venv\Scripts\activate
+   # Linux/macOS:
+   source venv/bin/activate
    ```
-3. Install dependency:
+3. Install dependensi:
    ```bash
    pip install -r requirements.txt
    ```
-4. Jalankan servernya:
+4. Jalankan aplikasi:
    ```bash
    python app.py
    ```
-5. Buka browser ke **http://127.0.0.1:5000**
+5. Buka browser di **http://127.0.0.1:5000**
 
-## Catatan penting soal WeasyPrint di Windows
+---
 
-WeasyPrint butuh library sistem **Pango/GDK-Pixbuf/Cairo**. Di Linux/Mac
-biasanya lancar. Di Windows kadang perlu install GTK3 runtime terpisah
-(cari "GTK3 Runtime Windows installer"), atau alternatifnya ganti
-`weasyprint` di `app.py` dan `requirements.txt` dengan `xhtml2pdf`
-(install-nya lebih ringan tapi hasil rendering CSS tidak sebagus WeasyPrint).
-
-## Struktur proyek
+## 📂 Struktur Proyek
 
 ```
 cuaca-app/
-├── app.py                  # Flask app: routing, panggil API BMKG, render PDF
-├── requirements.txt
+├── .github/
+│   └── workflows/
+│       └── docker-publish.yml  # GitHub Actions CI/CD to GHCR
+├── Dockerfile                  # Konfigurasi container Linux + WeasyPrint + Gunicorn
+├── docker-compose.yml          # Konfigurasi 1-klik Docker Compose
+├── requirements.txt            # Dependensi Python
+├── app.py                      # Flask backend, router, logic API BMKG & Open-Meteo
+├── build_wilayah_db.py         # Script generator database wilayah
 ├── data/
-│   └── wilayah.db          # SQLite: kode wilayah adm1-adm4 (≈83.700 desa/kelurahan)
+│   └── wilayah.db              # Database SQLite wilayah Indonesia
 ├── templates/
-│   ├── index.html          # Form pilih lokasi (cascading dropdown) + tanggal
-│   └── report.html         # Template laporan (dipakai untuk preview & sumber PDF)
-└── build_wilayah_db.py     # Script untuk build ulang wilayah.db dari sumber resmi
+│   ├── index.html              # UI Web interaktif (Dual-Mode: BMKG & Historis)
+│   ├── report.html             # Template PDF Prakiraan Cuaca BMKG
+│   └── report_historis.html    # Template PDF Cuaca Historis
+└── static/                     # Aset statis (jika ada)
 ```
-
-## Tentang `wilayah.db`
-
-Berisi kode wilayah administrasi (format `PP.RR.KK.DDDD`, sama persis dengan
-parameter `adm4` yang dipakai API BMKG) untuk seluruh Indonesia — bersumber
-dari dataset publik [cahyadsn/wilayah](https://github.com/cahyadsn/wilayah)
-(mengacu Kepmendagri No 300.2.2-2430 Tahun 2025). Sudah diubah ke SQLite
-dengan kolom `level` (1=provinsi, 2=kab/kota, 3=kecamatan, 4=desa) dan
-`parent` supaya query cascading dropdown-nya cepat.
-
-Kalau di kemudian hari ada pemekaran wilayah baru, tinggal jalankan ulang:
-```bash
-python build_wilayah_db.py
-```
-(script ini akan download ulang data terbaru dan build ulang `data/wilayah.db`)
-
-## Alur aplikasi
-
-1. User pilih Provinsi → Kab/Kota → Kecamatan → Desa (masing-masing level
-   di-fetch on-the-fly dari `wilayah.db` lewat endpoint `/api/...`, tidak
-   perlu load semua data sekaligus).
-2. Setelah Desa dipilih, aplikasi memanggil `/api/tanggal/<adm4>` yang
-   nge-hit API BMKG (`api.bmkg.go.id/publik/prakiraan-cuaca?adm4=...`) dan
-   mengembalikan daftar tanggal yang tersedia (biasanya 3 hari ke depan,
-   update tiap 3 jam — **ini batasan dari API BMKG sendiri, bukan
-   keterbatasan aplikasi**, jadi tidak bisa pilih tanggal jauh ke masa lalu
-   atau masa depan).
-3. User klik **Lihat Preview** (buka `report.html` di tab baru) atau
-   **Download PDF** (`/pdf`, yang me-render template yang sama lalu
-   convert ke PDF via WeasyPrint dan langsung trigger download).
-
-## Kustomisasi
-
-- Ganti logo/warna/layout PDF: edit `templates/report.html` (CSS di dalam
-  `<style>`, WeasyPrint support CSS `@page` untuk header/footer/nomor
-  halaman seperti yang sudah dipakai).
-- Mau expose ke jaringan lokal (diakses dari HP di WiFi yang sama)? Ganti
-  baris terakhir `app.py` jadi `app.run(host="0.0.0.0", port=5000)`.
